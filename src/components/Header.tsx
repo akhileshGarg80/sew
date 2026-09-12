@@ -27,6 +27,7 @@ import {
   History,
   X,
   Trash2,
+  FileText,
 } from 'lucide-react';
 import { GitHubUser, GitHubRepo, RateLimitInfo } from '../types';
 import { getProductionUrl } from '../services/github';
@@ -56,6 +57,7 @@ interface HeaderProps {
   setIsSplitCodeLive: React.Dispatch<React.SetStateAction<boolean>>;
   onOpenLivePreview?: () => void;
   onReset?: () => void;
+  onOpenDocs?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -77,6 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
   setIsSplitCodeLive,
   onOpenLivePreview,
   onReset,
+  onOpenDocs,
 }) => {
   const [searchInput, setSearchInput] = useState(currentUsername);
   const [showUserPopover, setShowUserPopover] = useState(false);
@@ -567,6 +570,18 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
         )}
+
+        {/* How It Works & Security Documentation Modal Trigger */}
+        <button
+          id="top-nav-docs-btn"
+          type="button"
+          onClick={onOpenDocs}
+          className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-emerald-500/60 text-xs text-neutral-300 hover:text-emerald-300 transition-colors shadow-xs group"
+          title="Guide & Security: Read how this site works, token privacy & benefits"
+        >
+          <FileText className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+          <span className="hidden md:inline font-medium text-[11px]">How It Works</span>
+        </button>
 
         {/* Rate Limit & Token Pill */}
         <button

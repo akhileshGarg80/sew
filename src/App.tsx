@@ -36,6 +36,7 @@ import { QuickFileSearchModal } from './components/QuickFileSearchModal';
 import { RightLinksRail } from './components/RightLinksRail';
 import { LiveSiteOverlayBox } from './components/LiveSiteOverlayBox';
 import { CleanInitialState } from './components/CleanInitialState';
+import { DocsSecurityModal } from './components/DocsSecurityModal';
 import { saveRecentUser } from './utils/recentUsers';
 import {
   AlertTriangle,
@@ -76,6 +77,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState<boolean>(false);
+  const [isDocsModalOpen, setIsDocsModalOpen] = useState<boolean>(false);
 
   // Layout customization states
   const [showRepoSidebar, setShowRepoSidebar] = useState<boolean>(true);
@@ -334,6 +336,7 @@ export default function App() {
           setIsSplitCodeLive={setIsSplitCodeLive}
           onOpenLivePreview={() => handleOpenLivePreview(selectedRepo || undefined)}
           onReset={handleReset}
+          onOpenDocs={() => setIsDocsModalOpen(true)}
         />
 
         {/* Error / Rate Limit Alert Banner */}
@@ -444,6 +447,7 @@ export default function App() {
           onSearch={loadUserData}
           isLoading={isLoadingUser}
           onOpenTokenModal={() => setIsTokenModalOpen(true)}
+          onOpenDocs={() => setIsDocsModalOpen(true)}
         />
       ) : isLoadingUser && !user ? (
         <div
@@ -599,6 +603,14 @@ export default function App() {
           checkRateLimit().then(setRateLimit);
           if (selectedRepo) loadRepoData(selectedRepo);
         }}
+        onOpenDocs={() => setIsDocsModalOpen(true)}
+      />
+
+      {/* How It Works & Token Security Documentation Modal */}
+      <DocsSecurityModal
+        isOpen={isDocsModalOpen}
+        onClose={() => setIsDocsModalOpen(false)}
+        onOpenTokenModal={() => setIsTokenModalOpen(true)}
       />
     </div>
   );

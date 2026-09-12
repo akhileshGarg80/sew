@@ -12,6 +12,11 @@ import {
   ArrowRight,
   ShieldCheck,
   Zap,
+  Lock,
+  ServerOff,
+  Key,
+  FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   getRecentUsers,
@@ -19,24 +24,32 @@ import {
   removeRecentUser,
   clearRecentUsers,
 } from '../utils/recentUsers';
+import { getStoredToken } from '../services/github';
 
 interface CleanInitialStateProps {
   onSearch: (username: string) => void;
   isLoading: boolean;
   onOpenTokenModal: () => void;
+  onOpenDocs: () => void;
 }
 
 export const CleanInitialState: React.FC<CleanInitialStateProps> = ({
   onSearch,
   isLoading,
   onOpenTokenModal,
+  onOpenDocs,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [recentUsers, setRecentUsers] = useState<string[]>([]);
+  const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
     setRecentUsers(getRecentUsers());
-    const handleUpdate = () => setRecentUsers(getRecentUsers());
+    setHasToken(Boolean(getStoredToken()));
+    const handleUpdate = () => {
+      setRecentUsers(getRecentUsers());
+      setHasToken(Boolean(getStoredToken()));
+    };
     window.addEventListener('recent-users-updated', handleUpdate);
     return () => window.removeEventListener('recent-users-updated', handleUpdate);
   }, []);
@@ -74,7 +87,7 @@ export const CleanInitialState: React.FC<CleanInitialStateProps> = ({
       id="clean-initial-state-canvas"
       className="flex-1 w-full h-full flex flex-col items-center justify-center p-4 sm:p-8 overflow-y-auto bg-gradient-to-b from-neutral-950 via-neutral-900/60 to-neutral-950 select-none"
     >
-      <div className="max-w-2xl w-full flex flex-col items-center text-center space-y-6 animate-in fade-in zoom-in-98 duration-200">
+      <div className="max-w-2xl w-full flex flex-col items-center text-center space-y-5 animate-in fade-in zoom-in-98 duration-200 py-6">
         {/* Brand Icon */}
         <div className="relative">
           <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-750 flex items-center justify-center shadow-xl text-emerald-400 group">
@@ -87,7 +100,7 @@ export const CleanInitialState: React.FC<CleanInitialStateProps> = ({
         </div>
 
         {/* Heading & Rate Limit Friendly Note */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-100">
             GitHub Explorer & Live Viewer
           </h1>
@@ -100,7 +113,7 @@ export const CleanInitialState: React.FC<CleanInitialStateProps> = ({
         {/* Clean Rate-Limit Shield Pill */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-600/40 text-[11px] font-mono text-emerald-300">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span>Credits Protected: No automatic API requests until you search</span>
+          <span>Credits Protected: Zero automatic API calls until you search</span>
         </div>
 
         {/* Search Input Box */}
@@ -176,7 +189,7 @@ export const CleanInitialState: React.FC<CleanInitialStateProps> = ({
           </div>
         ) : (
           /* Suggestion chips when nothing is saved yet */
-          <div className="flex flex-col items-center space-y-2 text-xs text-neutral-500">
+          <div className="flex flex-col items-center space-y-1.5 text-xs text-neutral-500">
             <span className="font-mono text-[11px]">Quick suggestion examples (click to search):</span>
             <div className="flex flex-wrap items-center justify-center gap-1.5">
               {suggestedExamples.map((example) => (
@@ -192,8 +205,88 @@ export const CleanInitialState: React.FC<CleanInitialStateProps> = ({
           </div>
         )}
 
+        {/* Dedicated GitHub Token & Security Guarantee Card */}
+        <div
+          id="initial-token-security-card"
+          className="w-full max-w-lg rounded-2xl bg-neutral-900/85 border border-neutral-750 p-4 sm:p-5 text-left space-y-3.5 shadow-xl"
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-400">
+                <Key className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-xs sm:text-sm font-semibold text-neutral-100">
+                  GitHub Token & Security Guarantee
+                </h2>
+                <p className="text-[11px] text-neutral-400">
+                  How tokens work, privacy guarantees, and rate limit benefits
+                </p>
+              </div>
+            </div>
+
+            {hasToken ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-600/50 text-[10px] font-mono">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                Active (5,000/hr)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-mono">
+                Anonymous (60/hr)
+              </span>
+            )}
+          </div>
+
+          {/* Key Facts list */}
+          <div className="space-y-2 text-xs">
+            <div className="flex items-start gap-2 text-neutral-300">
+              <ServerOff className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong className="text-neutral-100">Site Token Khud Nahi Leti:</strong> GitInspect is 100% client-side. We have no database or backend server. Your token is stored exclusively in your browser's private <code className="text-emerald-300 font-mono text-[10px]">localStorage</code> and sent directly to <code className="text-emerald-300 font-mono text-[10px]">api.github.com</code>.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2 text-neutral-300">
+              <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong className="text-neutral-100">Huge Benefit:</strong> Without a token, GitHub limits your IP to <span className="text-rose-300 font-mono">60 req/hr</span>. Adding a free personal token boosts your limit to <span className="text-emerald-400 font-mono font-semibold">5,000 req/hr (83x more)</span> so you never get rate-limited.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2 text-neutral-300">
+              <Lock className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong className="text-neutral-100">Zero Risk Setup:</strong> When creating a token on GitHub, leave all scope checkboxes empty. It grants read-only access for public repos with zero write permissions.
+              </p>
+            </div>
+          </div>
+
+          {/* Action buttons inside the card */}
+          <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-800">
+            <button
+              id="initial-open-docs-btn"
+              type="button"
+              onClick={onOpenDocs}
+              className="inline-flex items-center gap-1.5 text-xs text-neutral-400 hover:text-emerald-300 transition-colors cursor-pointer group"
+            >
+              <FileText className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <span>Read Full How-It-Works Guide</span>
+            </button>
+
+            <button
+              id="initial-open-token-modal-btn"
+              type="button"
+              onClick={onOpenTokenModal}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span>{hasToken ? 'Manage Token' : 'Add Free Token (Optional)'}</span>
+            </button>
+          </div>
+        </div>
+
         {/* Feature Cards Grid (visual overview of the app without burning credits) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg text-left pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg text-left pt-1">
           <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800/60 space-y-1">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
               <FolderTree className="w-3.5 h-3.5 text-emerald-400" />
@@ -224,17 +317,8 @@ export const CleanInitialState: React.FC<CleanInitialStateProps> = ({
             </p>
           </div>
         </div>
-
-        {/* Token CTA */}
-        <div className="pt-2">
-          <button
-            onClick={onOpenTokenModal}
-            className="text-[11px] font-mono text-neutral-500 hover:text-emerald-400 underline transition-colors"
-          >
-            Optional: Add a Personal GitHub Token to raise rate limit to 5,000 req/hr
-          </button>
-        </div>
       </div>
     </div>
   );
 };
+

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, X, CheckCircle2, ShieldAlert, ExternalLink, Trash2 } from 'lucide-react';
+import { Key, X, CheckCircle2, ShieldAlert, ExternalLink, Trash2, ShieldCheck, Lock, FileText } from 'lucide-react';
 import { getStoredToken, setStoredToken, checkRateLimit } from '../services/github';
 import { RateLimitInfo } from '../types';
 
@@ -7,9 +7,15 @@ interface TokenModalProps {
   isOpen: boolean;
   onClose: () => void;
   onTokenChanged: () => void;
+  onOpenDocs?: () => void;
 }
 
-export const TokenModal: React.FC<TokenModalProps> = ({ isOpen, onClose, onTokenChanged }) => {
+export const TokenModal: React.FC<TokenModalProps> = ({
+  isOpen,
+  onClose,
+  onTokenChanged,
+  onOpenDocs,
+}) => {
   const [token, setToken] = useState('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
@@ -128,9 +134,28 @@ export const TokenModal: React.FC<TokenModalProps> = ({ isOpen, onClose, onToken
               placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
               className="w-full px-3.5 py-2.5 rounded-lg bg-neutral-950 border border-neutral-700 text-neutral-100 font-mono text-sm placeholder:text-neutral-600 focus:outline-hidden focus:border-emerald-500 transition-colors"
             />
-            <p className="text-xs text-neutral-500">
-              Your token is stored safely only in your browser's local storage and used directly in the headers. No special permissions are required.
-            </p>
+            <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-xs text-neutral-300 space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold text-emerald-400">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>Zero Server Logging Guarantee</span>
+              </div>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                GitInspect is 100% client-side. The site does not store or see your token. It resides only in your browser's <code className="text-emerald-300 font-mono text-[10px]">localStorage</code> and is transmitted strictly over HTTPS directly to <code className="text-emerald-300 font-mono text-[10px]">api.github.com</code>.
+              </p>
+              {onOpenDocs && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenDocs();
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 underline pt-1 cursor-pointer"
+                >
+                  <FileText className="w-3 h-3" />
+                  <span>Read full guide & security documentation</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {statusMsg && (
