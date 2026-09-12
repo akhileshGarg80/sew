@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, BookMarked, MapPin, Building, ExternalLink, Calendar } from 'lucide-react';
+import { Users, BookMarked, MapPin, Building, ExternalLink, Calendar, Globe } from 'lucide-react';
 import { GitHubUser } from '../types';
 
 interface UserCardProps {
@@ -11,6 +11,12 @@ export const UserCard: React.FC<UserCardProps> = ({ user }) => {
     month: 'short',
     year: 'numeric',
   });
+
+  const websiteUrl = user.blog
+    ? user.blog.startsWith('http')
+      ? user.blog
+      : `https://${user.blog}`
+    : null;
 
   return (
     <div id="user-profile-bar" className="bg-neutral-900 border-b border-neutral-800 px-4 py-3.5 sm:px-6">
@@ -62,6 +68,21 @@ export const UserCard: React.FC<UserCardProps> = ({ user }) => {
             <span className="text-neutral-200 font-semibold">{user.followers}</span>
             <span>followers</span>
           </div>
+
+          {websiteUrl && (
+            <a
+              id="user-website-link"
+              href={websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-950 border border-neutral-800 text-emerald-400 hover:text-emerald-300 hover:border-emerald-700/60 transition-colors"
+              title={`Visit website: ${websiteUrl}`}
+            >
+              <Globe className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="truncate max-w-[130px] font-mono text-[11px]">{user.blog}</span>
+              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+            </a>
+          )}
 
           {user.location && (
             <div className="hidden lg:flex items-center gap-1 text-neutral-400">

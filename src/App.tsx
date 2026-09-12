@@ -7,6 +7,9 @@ import {
   fetchRepoCommits,
   fetchRepoPullRequests,
   fetchAllRepoComments,
+  fetchRepoLanguages,
+  fetchRepoContributors,
+  fetchRepoReleases,
   checkRateLimit,
 } from './services/github';
 import {
@@ -17,6 +20,9 @@ import {
   GitHubCommit,
   GitHubPullRequest,
   GitHubComment,
+  GitHubContributor,
+  GitHubRelease,
+  RepoLanguages,
   RateLimitInfo,
 } from './types';
 import { Header } from './components/Header';
@@ -49,6 +55,11 @@ export default function App() {
   const [commits, setCommits] = useState<GitHubCommit[]>([]);
   const [pullRequests, setPullRequests] = useState<GitHubPullRequest[]>([]);
   const [comments, setComments] = useState<GitHubComment[]>([]);
+  const [languages, setLanguages] = useState<RepoLanguages | null>(null);
+  const [contributors, setContributors] = useState<GitHubContributor[]>([]);
+  const [releases, setReleases] = useState<GitHubRelease[]>([]);
+
+  const [codeViewerMode, setCodeViewerMode] = useState<'code' | 'preview' | 'live-site'>('code');
 
   const [isLoadingUser, setIsLoadingUser] = useState<boolean>(false);
   const [isLoadingTree, setIsLoadingTree] = useState<boolean>(false);
@@ -88,6 +99,9 @@ export default function App() {
     setCommits([]);
     setPullRequests([]);
     setComments([]);
+    setLanguages(null);
+    setContributors([]);
+    setReleases([]);
 
     try {
       const userData = await fetchGitHubUser(username);
@@ -112,7 +126,7 @@ export default function App() {
     }
   }, []);
 
-  // Fetch repository tree and activity whenever selectedRepo changes
+  // Fetch repository tree, activity, languages, contributors, releases
   const loadRepoData = useCallback(async (repo: GitHubRepo) => {
     setIsLoadingTree(true);
     setIsLoadingActivity(true);
@@ -144,12 +158,15 @@ export default function App() {
       setIsLoadingTree(false);
     }
 
-    // Fetch Commits, PRs, and Comments
+    // Fetch Commits, PRs, Comments, Languages, Contributors, and Releases in parallel
     Promise.allSettled([
       fetchRepoCommits(repo.owner.login, repo.name),
       fetchRepoPullRequests(repo.owner.login, repo.name),
       fetchAllRepoComments(repo.owner.login, repo.name),
-    ]).then(([commitsRes, prsRes, commentsRes]) => {
+      fetchRepoLanguages(repo.owner.login, repo.name),
+      fetchRepoContributors(repo.owner.login, repo.name),
+      fetchRepoReleases(repo.owner.login, repo.name),
+    ]).then(([commitsRes, prsRes, commentsRes, langRes, contribRes, relRes]) => {
       if (commitsRes.status === 'fulfilled') setCommits(commitsRes.value);
       else setCommits([]);
 
@@ -158,6 +175,15 @@ export default function App() {
 
       if (commentsRes.status === 'fulfilled') setComments(commentsRes.value);
       else setComments([]);
+
+      if (langRes.status === 'fulfilled') setLanguages(langRes.value);
+      else setLanguages(null);
+
+      if (contribRes.status === 'fulfilled') setContributors(contribRes.value);
+      else setContributors([]);
+
+      if (relRes.status === 'fulfilled') setReleases(relRes.value);
+      else setReleases([]);
 
       setIsLoadingActivity(false);
     });
@@ -172,6 +198,7 @@ export default function App() {
   useEffect(() => {
     if (selectedRepo) {
       loadRepoData(selectedRepo);
+      setCodeViewerMode('code');
     }
   }, [selectedRepo, loadRepoData]);
 
@@ -186,6 +213,7 @@ export default function App() {
     if (!selectedRepo) return;
     setSelectedFilePath(filePath);
     setIsLoadingFile(true);
+    setCodeViewerMode('code');
     setMobileView('code');
 
     try {
@@ -203,113 +231,128 @@ export default function App() {
     }
   };
 
+  // Handle Live Production Preview Trigger
+  const handleOpenLivePreview = (repo?: GitHubRepo) => {
+    if (repo && repo.id !== selectedRepo?.id) {
+      setSelectedRepo(repo);
+    }
+    setCodeViewerMode('live-site');
+    setMobileView('code');
+  };
+
   return (
-    <div id="app-root" className="min-h-screen flex flex-col bg-neutral-950 text-neutral-100 antialiased font-sans">
-      {/* Top Global Header */}
-      <Header
-        currentUsername={currentUsername}
-        onSearch={loadUserData}
-        isLoading={isLoadingUser}
-        rateLimit={rateLimit}
-        onOpenTokenModal={() => setIsTokenModalOpen(true)}
-      />
+    <div
+      id="app-root"
+      className="h-screen max-h-screen w-screen max-w-full flex flex-col bg-neutral-950 text-neutral-100 antialiased font-sans overflow-hidden select-none"
+    >
+      {/* Top Persistent Fixed Section (Header + User Info + Error Banner) */}
+      <div className="shrink-0 flex flex-col border-b border-neutral-800 bg-neutral-950 z-20">
+        {/* Top Global Header */}
+        <Header
+          currentUsername={currentUsername}
+          onSearch={loadUserData}
+          isLoading={isLoadingUser}
+          rateLimit={rateLimit}
+          onOpenTokenModal={() => setIsTokenModalOpen(true)}
+        />
 
-      {/* User Profile Bar (if user loaded) */}
-      {user && <UserCard user={user} />}
+        {/* User Profile Bar (if user loaded) */}
+        {user && <UserCard user={user} />}
 
-      {/* Error / Rate Limit Alert Banner */}
-      {errorMessage && (
-        <div
-          id="error-banner"
-          className="bg-rose-950/80 border-b border-rose-800/80 px-4 py-3 text-rose-200 text-xs flex items-center justify-between gap-3 shadow-inner"
-        >
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {errorMessage.toLowerCase().includes('rate limit') && (
+        {/* Error / Rate Limit Alert Banner */}
+        {errorMessage && (
+          <div
+            id="error-banner"
+            className="bg-rose-950/80 border-b border-rose-800/80 px-4 py-2.5 text-rose-200 text-xs flex items-center justify-between gap-3 shadow-inner"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {errorMessage.toLowerCase().includes('rate limit') && (
+                <button
+                  id="add-token-from-error"
+                  onClick={() => setIsTokenModalOpen(true)}
+                  className="px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-1.5 transition-colors"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>Add GitHub Token</span>
+                </button>
+              )}
               <button
-                id="add-token-from-error"
-                onClick={() => setIsTokenModalOpen(true)}
-                className="px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-1.5 transition-colors"
+                onClick={() => setErrorMessage(null)}
+                className="text-rose-400 hover:text-rose-200 p-1"
               >
-                <Key className="w-3.5 h-3.5" />
-                <span>Add GitHub Token</span>
+                <XCircle className="w-4 h-4" />
               </button>
-            )}
-            <button
-              onClick={() => setErrorMessage(null)}
-              className="text-rose-400 hover:text-rose-200 p-1"
-            >
-              <XCircle className="w-4 h-4" />
-            </button>
+            </div>
           </div>
+        )}
+
+        {/* Mobile Tab Bar Switcher (< lg screens) */}
+        <div className="lg:hidden flex items-center border-t border-neutral-800 bg-neutral-900 text-xs font-medium">
+          <button
+            id="mobile-tab-repos"
+            onClick={() => setMobileView('repos')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+              mobileView === 'repos'
+                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <BookMarked className="w-3.5 h-3.5" />
+            <span>Repos ({repos.length})</span>
+          </button>
+
+          <button
+            id="mobile-tab-tree"
+            onClick={() => setMobileView('tree')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+              mobileView === 'tree'
+                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <FolderTree className="w-3.5 h-3.5" />
+            <span>Files</span>
+          </button>
+
+          <button
+            id="mobile-tab-code"
+            onClick={() => setMobileView('code')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+              mobileView === 'code'
+                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Code2 className="w-3.5 h-3.5" />
+            <span>Code & Live</span>
+          </button>
+
+          <button
+            id="mobile-tab-activity"
+            onClick={() => setMobileView('activity')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+              mobileView === 'activity'
+                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <GitPullRequest className="w-3.5 h-3.5" />
+            <span>Activity</span>
+          </button>
         </div>
-      )}
-
-      {/* Mobile Tab Bar Switcher (< lg screens) */}
-      <div className="lg:hidden flex items-center border-b border-neutral-800 bg-neutral-900 text-xs font-medium">
-        <button
-          id="mobile-tab-repos"
-          onClick={() => setMobileView('repos')}
-          className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-            mobileView === 'repos'
-              ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-              : 'border-transparent text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <BookMarked className="w-3.5 h-3.5" />
-          <span>Repos ({repos.length})</span>
-        </button>
-
-        <button
-          id="mobile-tab-tree"
-          onClick={() => setMobileView('tree')}
-          className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-            mobileView === 'tree'
-              ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-              : 'border-transparent text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <FolderTree className="w-3.5 h-3.5" />
-          <span>Files</span>
-        </button>
-
-        <button
-          id="mobile-tab-code"
-          onClick={() => setMobileView('code')}
-          className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-            mobileView === 'code'
-              ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-              : 'border-transparent text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <Code2 className="w-3.5 h-3.5" />
-          <span>Code</span>
-        </button>
-
-        <button
-          id="mobile-tab-activity"
-          onClick={() => setMobileView('activity')}
-          className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-            mobileView === 'activity'
-              ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-              : 'border-transparent text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <GitPullRequest className="w-3.5 h-3.5" />
-          <span>Activity</span>
-        </button>
       </div>
 
-      {/* Main 4-Column Responsive Layout */}
-      <main id="main-content-area" className="flex-1 flex overflow-hidden min-h-[600px] h-[calc(100vh-140px)]">
+      {/* Main 4-Column Responsive Layout - Strict Independent Scrolling */}
+      <main id="main-content-area" className="flex-1 min-h-0 flex overflow-hidden">
         {/* Column 1: Public Repositories (Left) */}
         <section
           aria-label="Repositories"
-          className={`w-full lg:w-72 xl:w-80 shrink-0 h-full ${
-            mobileView === 'repos' ? 'block' : 'hidden lg:block'
+          className={`w-full lg:w-72 xl:w-80 shrink-0 h-full overflow-hidden flex flex-col ${
+            mobileView === 'repos' ? 'flex' : 'hidden lg:flex'
           }`}
         >
           <RepoList
@@ -317,14 +360,15 @@ export default function App() {
             selectedRepo={selectedRepo}
             onSelectRepo={handleSelectRepo}
             isLoading={isLoadingUser}
+            onOpenLivePreview={handleOpenLivePreview}
           />
         </section>
 
         {/* Column 2: File & Folder Structure Explorer */}
         <section
           aria-label="File Tree"
-          className={`w-full lg:w-64 xl:w-72 shrink-0 h-full ${
-            mobileView === 'tree' ? 'block' : 'hidden lg:block'
+          className={`w-full lg:w-64 xl:w-72 shrink-0 h-full overflow-hidden flex flex-col ${
+            mobileView === 'tree' ? 'flex' : 'hidden lg:flex'
           }`}
         >
           <FileTree
@@ -337,25 +381,26 @@ export default function App() {
           />
         </section>
 
-        {/* Column 3: File Code Viewer (Center/Expandable) */}
+        {/* Column 3: File Code Viewer & Live Preview (Center/Expandable) */}
         <section
           aria-label="Code Viewer"
-          className={`w-full lg:flex-1 h-full min-w-0 ${
-            mobileView === 'code' ? 'block' : 'hidden lg:block'
+          className={`w-full lg:flex-1 h-full min-w-0 overflow-hidden flex flex-col ${
+            mobileView === 'code' ? 'flex' : 'hidden lg:flex'
           }`}
         >
           <CodeViewer
             repo={selectedRepo}
             fileData={fileData}
             isLoading={isLoadingFile}
+            initialMode={codeViewerMode}
           />
         </section>
 
-        {/* Column 4: Commits, PRs & Comments (Right Side) */}
+        {/* Column 4: Commits, PRs, Comments & Overview (Right Side) */}
         <section
           aria-label="Activity Feed"
-          className={`w-full lg:w-80 xl:w-96 shrink-0 h-full ${
-            mobileView === 'activity' ? 'block' : 'hidden lg:block'
+          className={`w-full lg:w-80 xl:w-96 shrink-0 h-full overflow-hidden flex flex-col ${
+            mobileView === 'activity' ? 'flex' : 'hidden lg:flex'
           }`}
         >
           <ActivityPanel
@@ -363,8 +408,12 @@ export default function App() {
             commits={commits}
             pullRequests={pullRequests}
             comments={comments}
+            languages={languages}
+            contributors={contributors}
+            releases={releases}
             isLoading={isLoadingActivity}
             onRefresh={() => selectedRepo && loadRepoData(selectedRepo)}
+            onOpenLivePreview={() => handleOpenLivePreview(selectedRepo || undefined)}
           />
         </section>
       </main>

@@ -7,6 +7,9 @@ import {
   GitHubComment,
   FileContentState,
   RateLimitInfo,
+  GitHubContributor,
+  GitHubRelease,
+  RepoLanguages,
 } from '../types';
 
 const BASE_URL = 'https://api.github.com';
@@ -346,4 +349,46 @@ export function formatTimeAgo(dateString: string): string {
   if (months < 12) return `${months}mo ago`;
   const years = Math.floor(months / 12);
   return `${years}y ago`;
+}
+
+export async function fetchRepoLanguages(owner: string, repo: string): Promise<RepoLanguages> {
+  try {
+    const data = await fetchWithCache<RepoLanguages>(`${BASE_URL}/repos/${owner}/${repo}/languages`);
+    return data || {};
+  } catch {
+    return {};
+  }
+}
+
+export async function fetchRepoContributors(owner: string, repo: string): Promise<GitHubContributor[]> {
+  try {
+    const data = await fetchWithCache<GitHubContributor[]>(`${BASE_URL}/repos/${owner}/${repo}/contributors?per_page=15`);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchRepoReleases(owner: string, repo: string): Promise<GitHubRelease[]> {
+  try {
+    const data = await fetchWithCache<GitHubRelease[]>(`${BASE_URL}/repos/${owner}/${repo}/releases?per_page=10`);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getProductionUrl(repo: GitHubRepo | null): string | null {
+  if (!repo) return null;
+  if (repo.homepage && repo.homepage.trim() !== '') {
+    const hp = repo.homepage.trim();
+    if (hp.startsWith('http://') || hp.startsWith('https://')) {
+      return hp;
+    }
+    return `https://${hp}`;
+  }
+  if (repo.has_pages) {
+    return `https://${repo.owner.login}.github.io/${repo.name}/`;
+  }
+  return null;
 }

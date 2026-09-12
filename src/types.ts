@@ -42,6 +42,8 @@ export interface GitHubRepo {
   open_issues_count: number;
   default_branch: string;
   topics?: string[];
+  has_pages?: boolean;
+  archived?: boolean;
   license?: {
     key: string;
     name: string;
@@ -163,3 +165,24 @@ export interface RateLimitInfo {
   remaining: number;
   reset: number;
 }
+
+export interface GitHubContributor {
+  id: number;
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  contributions: number;
+}
+
+export interface GitHubRelease {
+  id: number;
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  published_at: string;
+  html_url: string;
+  prerelease: boolean;
+  draft: boolean;
+}
+
+export type RepoLanguages = Record<string, number>;

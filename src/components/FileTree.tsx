@@ -220,9 +220,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
   }
 
   return (
-    <div id="file-tree-panel" className="flex flex-col h-full bg-neutral-900 border-r border-neutral-800">
+    <div id="file-tree-panel" className="flex flex-col h-full bg-neutral-900 border-r border-neutral-800 overflow-hidden select-none">
       {/* Panel Top Header */}
-      <div className="p-3.5 border-b border-neutral-800 bg-neutral-950/40 space-y-2.5">
+      <div className="p-3.5 border-b border-neutral-800 bg-neutral-950/50 space-y-2.5 shrink-0">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <GitBranch className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -269,7 +269,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       </div>
 
       {/* Tree Content */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div id="file-tree-scroll-container" className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2">
         {isLoading ? (
           <div className="p-3 space-y-2">
             {[1, 2, 3, 4, 6, 7].map((i) => (
