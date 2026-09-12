@@ -44,6 +44,7 @@ export interface GitHubRepo {
   topics?: string[];
   has_pages?: boolean;
   archived?: boolean;
+  clone_url?: string;
   license?: {
     key: string;
     name: string;

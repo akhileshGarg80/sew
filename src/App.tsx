@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   fetchGitHubUser,
   fetchUserRepos,
@@ -11,6 +11,7 @@ import {
   fetchRepoContributors,
   fetchRepoReleases,
   checkRateLimit,
+  getProductionUrl,
 } from './services/github';
 import {
   GitHubUser,
@@ -26,12 +27,14 @@ import {
   RateLimitInfo,
 } from './types';
 import { Header } from './components/Header';
-import { UserCard } from './components/UserCard';
 import { RepoList } from './components/RepoList';
 import { FileTree } from './components/FileTree';
 import { CodeViewer } from './components/CodeViewer';
 import { ActivityPanel } from './components/ActivityPanel';
 import { TokenModal } from './components/TokenModal';
+import { QuickFileSearchModal } from './components/QuickFileSearchModal';
+import { RightLinksRail } from './components/RightLinksRail';
+import { LiveSiteOverlayBox } from './components/LiveSiteOverlayBox';
 import {
   AlertTriangle,
   FolderTree,
@@ -40,6 +43,7 @@ import {
   BookMarked,
   Key,
   XCircle,
+  Globe,
 } from 'lucide-react';
 
 export default function App() {
@@ -70,8 +74,43 @@ export default function App() {
   const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState<boolean>(false);
 
+  // Layout customization states
+  const [showRepoSidebar, setShowRepoSidebar] = useState<boolean>(true);
+  const [showActivitySidebar, setShowActivitySidebar] = useState<boolean>(true);
+  const [isSplitCodeLive, setIsSplitCodeLive] = useState<boolean>(false);
+  const [isQuickSearchOpen, setIsQuickSearchOpen] = useState<boolean>(false);
+
+  // Live site overlay box state (full page box above content, with right links rail remaining accessible)
+  const [isOverlayBoxOpen, setIsOverlayBoxOpen] = useState<boolean>(false);
+  const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
+  const [overlayTitle, setOverlayTitle] = useState<string>('');
+  const [overlayRepo, setOverlayRepo] = useState<GitHubRepo | null>(null);
+
+  // Right Links Rail density mode ('compact' icon-only or 'expanded' short URL)
+  const [railMode, setRailMode] = useState<'compact' | 'expanded'>('compact');
+
   // Mobile layout active column
-  const [mobileView, setMobileView] = useState<'repos' | 'tree' | 'code' | 'activity'>('repos');
+  const [mobileView, setMobileView] = useState<'repos' | 'tree' | 'code' | 'activity' | 'links'>('repos');
+
+  // Width in pixels of the right rail so overlay leaves right side free
+  const railWidthPx = useMemo(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      return 0;
+    }
+    return railMode === 'compact' ? 56 : 224;
+  }, [railMode]);
+
+  // Global keyboard shortcuts (Ctrl+P / Cmd+P to quick search files)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setIsQuickSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Listen for rate limit updates from headers
   useEffect(() => {
@@ -233,37 +272,54 @@ export default function App() {
 
   // Handle Live Production Preview Trigger
   const handleOpenLivePreview = (repo?: GitHubRepo) => {
+    const targetRepo = repo || selectedRepo;
     if (repo && repo.id !== selectedRepo?.id) {
       setSelectedRepo(repo);
     }
-    setCodeViewerMode('live-site');
-    setMobileView('code');
+    const prod = targetRepo ? getProductionUrl(targetRepo) : null;
+    if (prod) {
+      setOverlayUrl(prod);
+      setOverlayTitle(`${targetRepo?.name || 'Site'} Live`);
+      setOverlayRepo(targetRepo || null);
+      setIsOverlayBoxOpen(true);
+    } else {
+      setCodeViewerMode('live-site');
+      setMobileView('code');
+    }
   };
 
   return (
     <div
       id="app-root"
-      className="h-screen max-h-screen w-screen max-w-full flex flex-col bg-neutral-950 text-neutral-100 antialiased font-sans overflow-hidden select-none"
+      className="h-screen max-h-screen w-screen max-w-full flex flex-col bg-neutral-950 text-neutral-100 antialiased font-sans overflow-hidden select-none relative"
     >
-      {/* Top Persistent Fixed Section (Header + User Info + Error Banner) */}
-      <div className="shrink-0 flex flex-col border-b border-neutral-800 bg-neutral-950 z-20">
-        {/* Top Global Header */}
+      {/* Top Persistent Fixed Single Nav Bar */}
+      <div className="shrink-0 flex flex-col border-b border-neutral-800 bg-neutral-950 z-30">
         <Header
           currentUsername={currentUsername}
+          user={user}
+          repos={repos}
+          selectedRepo={selectedRepo}
+          onSelectRepo={handleSelectRepo}
           onSearch={loadUserData}
           isLoading={isLoadingUser}
           rateLimit={rateLimit}
           onOpenTokenModal={() => setIsTokenModalOpen(true)}
+          onOpenQuickFileSearch={() => setIsQuickSearchOpen(true)}
+          showRepoSidebar={showRepoSidebar}
+          setShowRepoSidebar={setShowRepoSidebar}
+          showActivitySidebar={showActivitySidebar}
+          setShowActivitySidebar={setShowActivitySidebar}
+          isSplitCodeLive={isSplitCodeLive}
+          setIsSplitCodeLive={setIsSplitCodeLive}
+          onOpenLivePreview={() => handleOpenLivePreview(selectedRepo || undefined)}
         />
-
-        {/* User Profile Bar (if user loaded) */}
-        {user && <UserCard user={user} />}
 
         {/* Error / Rate Limit Alert Banner */}
         {errorMessage && (
           <div
             id="error-banner"
-            className="bg-rose-950/80 border-b border-rose-800/80 px-4 py-2.5 text-rose-200 text-xs flex items-center justify-between gap-3 shadow-inner"
+            className="bg-rose-950/90 border-b border-rose-800 px-4 py-2 text-rose-200 text-xs flex items-center justify-between gap-3 shadow-inner"
           >
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -343,31 +399,46 @@ export default function App() {
             <GitPullRequest className="w-3.5 h-3.5" />
             <span>Activity</span>
           </button>
+
+          <button
+            id="mobile-tab-links"
+            onClick={() => setMobileView('links')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+              mobileView === 'links'
+                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Links</span>
+          </button>
         </div>
       </div>
 
-      {/* Main 4-Column Responsive Layout - Strict Independent Scrolling */}
-      <main id="main-content-area" className="flex-1 min-h-0 flex overflow-hidden">
-        {/* Column 1: Public Repositories (Left) */}
-        <section
-          aria-label="Repositories"
-          className={`w-full lg:w-72 xl:w-80 shrink-0 h-full overflow-hidden flex flex-col ${
-            mobileView === 'repos' ? 'flex' : 'hidden lg:flex'
-          }`}
-        >
-          <RepoList
-            repos={repos}
-            selectedRepo={selectedRepo}
-            onSelectRepo={handleSelectRepo}
-            isLoading={isLoadingUser}
-            onOpenLivePreview={handleOpenLivePreview}
-          />
-        </section>
+      {/* Main Responsive Layout with 5 Side-by-Side Columns */}
+      <main id="main-content-area" className="flex-1 min-h-0 flex overflow-hidden relative">
+        {/* Column 1: Public Repositories (Vertical list) */}
+        {showRepoSidebar && (
+          <section
+            aria-label="Repositories"
+            className={`w-full lg:w-56 xl:w-64 shrink-0 h-full overflow-hidden flex flex-col border-r border-neutral-850 ${
+              mobileView === 'repos' ? 'flex' : 'hidden lg:flex'
+            }`}
+          >
+            <RepoList
+              repos={repos}
+              selectedRepo={selectedRepo}
+              onSelectRepo={handleSelectRepo}
+              isLoading={isLoadingUser}
+              onOpenLivePreview={handleOpenLivePreview}
+            />
+          </section>
+        )}
 
         {/* Column 2: File & Folder Structure Explorer */}
         <section
           aria-label="File Tree"
-          className={`w-full lg:w-64 xl:w-72 shrink-0 h-full overflow-hidden flex flex-col ${
+          className={`w-full lg:w-52 xl:w-60 shrink-0 h-full overflow-hidden flex flex-col border-r border-neutral-850 ${
             mobileView === 'tree' ? 'flex' : 'hidden lg:flex'
           }`}
         >
@@ -381,7 +452,7 @@ export default function App() {
           />
         </section>
 
-        {/* Column 3: File Code Viewer & Live Preview (Center/Expandable) */}
+        {/* Column 3: File Code Viewer & Live Preview (Center View - Highest Flexibility) */}
         <section
           aria-label="Code Viewer"
           className={`w-full lg:flex-1 h-full min-w-0 overflow-hidden flex flex-col ${
@@ -393,30 +464,83 @@ export default function App() {
             fileData={fileData}
             isLoading={isLoadingFile}
             initialMode={codeViewerMode}
+            isSplitCodeLive={isSplitCodeLive}
+            onToggleSplitMode={() => setIsSplitCodeLive((prev) => !prev)}
+            onOpenLiveSiteOverlay={(url, title) => {
+              setOverlayUrl(url);
+              setOverlayTitle(title);
+              setOverlayRepo(selectedRepo);
+              setIsOverlayBoxOpen(true);
+            }}
           />
         </section>
 
-        {/* Column 4: Commits, PRs, Comments & Overview (Right Side) */}
+        {/* Column 4: Commits, PRs, Comments & Overview (Right-side column) */}
+        {showActivitySidebar && (
+          <section
+            aria-label="Activity Feed"
+            className={`w-full lg:w-64 xl:w-72 shrink-0 h-full overflow-hidden flex flex-col border-l border-neutral-850 ${
+              mobileView === 'activity' ? 'flex' : 'hidden lg:flex'
+            }`}
+          >
+            <ActivityPanel
+              repo={selectedRepo}
+              commits={commits}
+              pullRequests={pullRequests}
+              comments={comments}
+              languages={languages}
+              contributors={contributors}
+              releases={releases}
+              isLoading={isLoadingActivity}
+              onRefresh={() => selectedRepo && loadRepoData(selectedRepo)}
+              onOpenLivePreview={() => handleOpenLivePreview(selectedRepo || undefined)}
+            />
+          </section>
+        )}
+
+        {/* Column 5: Right Links Rail (Far-right quick links & live demos) */}
         <section
-          aria-label="Activity Feed"
-          className={`w-full lg:w-80 xl:w-96 shrink-0 h-full overflow-hidden flex flex-col ${
-            mobileView === 'activity' ? 'flex' : 'hidden lg:flex'
+          aria-label="Quick Links & Demos"
+          className={`h-full overflow-hidden flex flex-col ${
+            mobileView === 'links' ? 'flex w-full' : 'hidden lg:flex shrink-0'
           }`}
         >
-          <ActivityPanel
-            repo={selectedRepo}
-            commits={commits}
-            pullRequests={pullRequests}
-            comments={comments}
-            languages={languages}
-            contributors={contributors}
-            releases={releases}
-            isLoading={isLoadingActivity}
-            onRefresh={() => selectedRepo && loadRepoData(selectedRepo)}
-            onOpenLivePreview={() => handleOpenLivePreview(selectedRepo || undefined)}
+          <RightLinksRail
+            repos={repos}
+            selectedRepo={selectedRepo}
+            user={user}
+            activeOverlayUrl={overlayUrl}
+            isOverlayOpen={isOverlayBoxOpen}
+            onSelectLink={(url, title, repo) => {
+              setOverlayUrl(url);
+              setOverlayTitle(title);
+              setOverlayRepo(repo);
+              setIsOverlayBoxOpen(true);
+            }}
+            railMode={railMode}
+            setRailMode={setRailMode}
           />
         </section>
+
+        {/* Full-Page Live Site Box (covers left & center columns, leaving right links rail accessible) */}
+        <LiveSiteOverlayBox
+          isOpen={isOverlayBoxOpen}
+          url={overlayUrl}
+          title={overlayTitle}
+          repo={overlayRepo}
+          onClose={() => setIsOverlayBoxOpen(false)}
+          railWidth={railWidthPx}
+        />
       </main>
+
+      {/* Quick File Search Modal (Cmd/Ctrl+P) */}
+      <QuickFileSearchModal
+        isOpen={isQuickSearchOpen}
+        onClose={() => setIsQuickSearchOpen(false)}
+        items={treeItems}
+        onSelectFile={handleSelectFile}
+        repoName={selectedRepo?.name || ''}
+      />
 
       {/* GitHub Token Modal */}
       <TokenModal

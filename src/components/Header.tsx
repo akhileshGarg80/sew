@@ -1,153 +1,525 @@
-import React, { useState } from 'react';
-import { Search, Github, Key, RefreshCw, Sparkles } from 'lucide-react';
-import { RateLimitInfo } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Search,
+  Github,
+  Key,
+  RefreshCw,
+  GitBranch,
+  Star,
+  GitFork,
+  Download,
+  ExternalLink,
+  ChevronDown,
+  Globe,
+  SlidersHorizontal,
+  Code2,
+  FileCode2,
+  Users,
+  MapPin,
+  Building,
+  Calendar,
+  Columns,
+  Maximize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  History,
+  X,
+} from 'lucide-react';
+import { GitHubUser, GitHubRepo, RateLimitInfo } from '../types';
+import { getProductionUrl } from '../services/github';
 
 interface HeaderProps {
   currentUsername: string;
+  user: GitHubUser | null;
+  repos: GitHubRepo[];
+  selectedRepo: GitHubRepo | null;
+  onSelectRepo: (repo: GitHubRepo) => void;
   onSearch: (username: string) => void;
   isLoading: boolean;
   rateLimit: RateLimitInfo | null;
   onOpenTokenModal: () => void;
+  onOpenQuickFileSearch: () => void;
+  showRepoSidebar: boolean;
+  setShowRepoSidebar: React.Dispatch<React.SetStateAction<boolean>>;
+  showActivitySidebar: boolean;
+  setShowActivitySidebar: React.Dispatch<React.SetStateAction<boolean>>;
+  isSplitCodeLive: boolean;
+  setIsSplitCodeLive: React.Dispatch<React.SetStateAction<boolean>>;
+  onOpenLivePreview?: () => void;
 }
-
-const POPULAR_USERS = [
-  { name: 'shadcn', label: 'shadcn' },
-  { name: 'facebook', label: 'facebook' },
-  { name: 'vercel', label: 'vercel' },
-  { name: 'tailwindlabs', label: 'tailwindlabs' },
-  { name: 'torvalds', label: 'torvalds' },
-  { name: 'vuejs', label: 'vuejs' },
-];
 
 export const Header: React.FC<HeaderProps> = ({
   currentUsername,
+  user,
+  repos,
+  selectedRepo,
+  onSelectRepo,
   onSearch,
   isLoading,
   rateLimit,
   onOpenTokenModal,
+  onOpenQuickFileSearch,
+  showRepoSidebar,
+  setShowRepoSidebar,
+  showActivitySidebar,
+  setShowActivitySidebar,
+  isSplitCodeLive,
+  setIsSplitCodeLive,
+  onOpenLivePreview,
 }) => {
   const [searchInput, setSearchInput] = useState(currentUsername);
+  const [showUserPopover, setShowUserPopover] = useState(false);
+  const [showRepoDropdown, setShowRepoDropdown] = useState(false);
+  const [showSearchHistory, setShowSearchHistory] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('gh_explorer_recent_users');
+      return saved ? JSON.parse(saved) : ['shadcn', 'torvalds', 'vercel', 'facebook'];
+    } catch {
+      return ['shadcn', 'torvalds', 'vercel', 'facebook'];
+    }
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const userPopoverRef = useRef<HTMLDivElement>(null);
+  const repoDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync search input when username changes
+  useEffect(() => {
+    setSearchInput(currentUsername);
+  }, [currentUsername]);
+
+  // Click outside handlers
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userPopoverRef.current && !userPopoverRef.current.contains(e.target as Node)) {
+        setShowUserPopover(false);
+      }
+      if (repoDropdownRef.current && !repoDropdownRef.current.contains(e.target as Node)) {
+        setShowRepoDropdown(false);
+      }
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setShowSearchHistory(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const saveRecentSearch = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const filtered = prev.filter((u) => u.toLowerCase() !== trimmed.toLowerCase());
+      const updated = [trimmed, ...filtered].slice(0, 8);
+      try {
+        localStorage.setItem('gh_explorer_recent_users', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchInput.trim()) {
+      saveRecentSearch(searchInput.trim());
       onSearch(searchInput.trim());
+      setShowSearchHistory(false);
     }
   };
 
-  const handleQuickSelect = (user: string) => {
-    setSearchInput(user);
-    onSearch(user);
+  const handleSelectRecent = (name: string) => {
+    setSearchInput(name);
+    saveRecentSearch(name);
+    onSearch(name);
+    setShowSearchHistory(false);
   };
 
+  const clearRecentSearches = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRecentSearches([]);
+    localStorage.removeItem('gh_explorer_recent_users');
+  };
+
+  const prodUrl = selectedRepo ? getProductionUrl(selectedRepo) : null;
+
+  const downloadZipUrl = selectedRepo
+    ? `https://github.com/${selectedRepo.owner.login}/${selectedRepo.name}/archive/refs/heads/${
+        selectedRepo.default_branch || 'main'
+      }.zip`
+    : null;
+
+  const githubDevUrl = selectedRepo
+    ? `https://github.dev/${selectedRepo.owner.login}/${selectedRepo.name}`
+    : null;
+
   return (
-    <header id="app-header" className="sticky top-0 z-30 bg-neutral-900/95 backdrop-blur-md border-b border-neutral-800">
-      <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        {/* Logo & Title */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-100 shadow-xs">
-              <Github className="w-5 h-5 text-neutral-100" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-bold text-base sm:text-lg text-neutral-100 tracking-tight">
-                  GitHub Repo Explorer
-                </h1>
-                <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 rounded-full">
-                  Live v3 API
-                </span>
-              </div>
-              <p className="text-xs text-neutral-400 hidden sm:block">
-                Inspect public repos, file trees, code & full activity
-              </p>
-            </div>
+    <header
+      id="app-top-nav"
+      className="h-13 shrink-0 bg-neutral-900 border-b border-neutral-800 px-3 sm:px-4 flex items-center justify-between gap-2.5 z-40 select-none relative"
+    >
+      {/* Left Section: Logo, User Badge & Breadcrumb / Repo Switcher */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        {/* Brand Logo */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-700 flex items-center justify-center text-neutral-100 shadow-xs">
+            <Github className="w-4 h-4 text-emerald-400" />
           </div>
-
-          {/* Rate Limit Pill - Mobile View */}
-          <div className="flex md:hidden items-center gap-1.5">
-            <button
-              id="mobile-token-btn"
-              onClick={onOpenTokenModal}
-              title="GitHub Rate Limit & Token Settings"
-              className="px-2.5 py-1 text-xs rounded-lg bg-neutral-800/80 border border-neutral-700 text-neutral-300 hover:text-neutral-100 flex items-center gap-1.5"
-            >
-              <Key className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{rateLimit ? `${rateLimit.remaining}/${rateLimit.limit}` : 'Rate Limit'}</span>
-            </button>
-          </div>
+          <span className="font-bold text-sm text-neutral-100 hidden sm:inline tracking-tight">
+            GitInspect
+          </span>
         </div>
 
-        {/* Search Bar & Quick Picks */}
-        <div className="flex-1 max-w-2xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <form onSubmit={handleSubmit} className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-400">
-              <Search className="w-4 h-4" />
-            </div>
-            <input
-              id="github-username-input"
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Enter GitHub username (e.g. torvalds, vercel, shadcn)..."
-              className="w-full pl-9 pr-24 py-2 rounded-lg bg-neutral-950 border border-neutral-700 text-sm text-neutral-100 placeholder:text-neutral-500 focus:outline-hidden focus:border-emerald-500 transition-colors"
-            />
-            <button
-              id="github-search-submit"
-              type="submit"
-              disabled={isLoading || !searchInput.trim()}
-              className="absolute inset-y-1 right-1 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-medium transition-colors flex items-center gap-1 disabled:opacity-50"
-            >
-              {isLoading ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <span>Search</span>
-              )}
-            </button>
-          </form>
+        <div className="h-5 w-px bg-neutral-800 hidden sm:block" />
 
-          {/* Rate Limit & API Token button - Desktop View */}
-          <div className="hidden md:flex items-center gap-2 shrink-0">
+        {/* User Pill with Interactive Popover */}
+        {user ? (
+          <div ref={userPopoverRef} className="relative shrink-0">
             <button
-              id="token-settings-btn"
-              onClick={onOpenTokenModal}
-              className="px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-xs font-mono text-neutral-300 hover:text-neutral-100 flex items-center gap-2 transition-colors shadow-xs"
-              title="Click to configure GitHub Personal Access Token"
+              id="user-profile-popover-btn"
+              onClick={() => setShowUserPopover((prev) => !prev)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-neutral-950/80 hover:bg-neutral-800 border border-neutral-800 text-xs text-neutral-200 transition-colors shadow-xs"
+              title="Click to view author details, stats & links"
             >
-              <Key className="w-3.5 h-3.5 text-emerald-400" />
-              <span>
-                Rate Limit:{' '}
-                <strong className={rateLimit && rateLimit.remaining < 10 ? 'text-rose-400' : 'text-emerald-400'}>
-                  {rateLimit ? `${rateLimit.remaining} / ${rateLimit.limit}` : '60 / 60'}
-                </strong>
+              <img
+                src={user.avatar_url}
+                alt={user.login}
+                referrerPolicy="no-referrer"
+                className="w-5 h-5 rounded-full border border-neutral-700 shrink-0"
+              />
+              <span className="font-semibold text-neutral-100 max-w-[90px] sm:max-w-[120px] truncate">
+                @{user.login}
               </span>
+              <span className="hidden md:inline-flex items-center px-1.5 py-0.2 rounded-full bg-neutral-800 text-[10px] text-neutral-400 font-mono">
+                {user.public_repos} repos
+              </span>
+              <ChevronDown className="w-3 h-3 text-neutral-400" />
             </button>
+
+            {/* Profile Popover (Overlay that doesn't eat vertical screen height) */}
+            {showUserPopover && (
+              <div
+                id="user-profile-popover"
+                className="absolute left-0 top-full mt-1.5 w-72 bg-neutral-900 border border-neutral-750 rounded-xl shadow-2xl p-3.5 z-50 animate-in fade-in zoom-in-95 duration-100 space-y-2.5 text-xs text-neutral-300"
+              >
+                <div className="flex items-start gap-3">
+                  <img
+                    src={user.avatar_url}
+                    alt={user.login}
+                    referrerPolicy="no-referrer"
+                    className="w-11 h-11 rounded-full border border-neutral-700 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-bold text-sm text-neutral-100 truncate">
+                      {user.name || user.login}
+                    </h3>
+                    <p className="text-[11px] text-emerald-400 font-mono">@{user.login}</p>
+                    {user.bio && (
+                      <p className="text-[11px] text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
+                        {user.bio}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-neutral-800 grid grid-cols-2 gap-2 text-[11px] font-mono text-neutral-400">
+                  <div>
+                    <span className="text-neutral-500 block text-[10px]">Followers</span>
+                    <span className="text-neutral-200 font-medium">{user.followers}</span>
+                  </div>
+                  <div>
+                    <span className="text-neutral-500 block text-[10px]">Public Repos</span>
+                    <span className="text-neutral-200 font-medium">{user.public_repos}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-[11px] text-neutral-400 pt-1">
+                  {user.blog && (
+                    <a
+                      href={user.blog.startsWith('http') ? user.blog : `https://${user.blog}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-emerald-400 hover:underline truncate"
+                    >
+                      <Globe className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{user.blog}</span>
+                    </a>
+                  )}
+                  {user.location && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <MapPin className="w-3 h-3 shrink-0 text-neutral-500" />
+                      <span className="truncate">{user.location}</span>
+                    </div>
+                  )}
+                  {user.company && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Building className="w-3 h-3 shrink-0 text-neutral-500" />
+                      <span className="truncate">{user.company}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-neutral-800">
+                  <a
+                    href={user.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-medium flex items-center justify-center gap-1.5 transition-colors text-[11px]"
+                  >
+                    <span>View on GitHub</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        ) : null}
+
+        {/* Selected Repo Dropdown Selector */}
+        {selectedRepo && (
+          <div ref={repoDropdownRef} className="relative min-w-0">
+            <button
+              id="top-nav-repo-selector-btn"
+              onClick={() => setShowRepoDropdown((prev) => !prev)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-neutral-950/80 hover:bg-neutral-800 border border-neutral-800 text-xs font-mono text-neutral-200 transition-colors max-w-[130px] sm:max-w-[200px] md:max-w-[240px] truncate shadow-xs"
+              title={`Active repo: ${selectedRepo.name}. Click to switch repo`}
+            >
+              <span className="text-neutral-500 hidden md:inline">/</span>
+              <span className="font-semibold text-emerald-400 truncate">{selectedRepo.name}</span>
+              <div className="flex items-center gap-1 text-[10px] text-neutral-400 shrink-0 ml-0.5">
+                <GitBranch className="w-3 h-3 text-neutral-500" />
+                <span className="hidden xl:inline">{selectedRepo.default_branch || 'main'}</span>
+              </div>
+              <ChevronDown className="w-3 h-3 text-neutral-400 shrink-0" />
+            </button>
+
+            {/* Quick Repo Selector Dropdown */}
+            {showRepoDropdown && (
+              <div
+                id="top-nav-repo-dropdown"
+                className="absolute left-0 top-full mt-1.5 w-72 bg-neutral-900 border border-neutral-750 rounded-xl shadow-2xl p-2 z-50 max-h-80 overflow-y-auto divide-y divide-neutral-800/60"
+              >
+                <div className="p-1.5 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                  Switch Repository ({repos.length})
+                </div>
+                {repos.map((repo) => (
+                  <button
+                    key={repo.id}
+                    onClick={() => {
+                      onSelectRepo(repo);
+                      setShowRepoDropdown(false);
+                    }}
+                    className={`w-full text-left p-2 rounded-lg flex items-center justify-between text-xs transition-colors ${
+                      repo.id === selectedRepo.id
+                        ? 'bg-emerald-950/80 text-emerald-300 font-medium'
+                        : 'text-neutral-300 hover:bg-neutral-800'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1 pr-2">
+                      <p className="truncate font-semibold">{repo.name}</p>
+                      {repo.description && (
+                        <p className="text-[10px] text-neutral-500 truncate">{repo.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] font-mono text-amber-400 shrink-0">
+                      <Star className="w-3 h-3 fill-amber-400/30" />
+                      <span>{repo.stargazers_count}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Suggested User Chips */}
-      <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 border-t border-neutral-800/60 flex items-center gap-2 overflow-x-auto scrollbar-none text-xs text-neutral-400">
-        <span className="flex items-center gap-1 font-medium text-neutral-400 shrink-0">
-          <Sparkles className="w-3 h-3 text-emerald-400" />
-          Popular:
-        </span>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {POPULAR_USERS.map((user) => (
-            <button
-              key={user.name}
-              id={`quick-user-${user.name}`}
-              onClick={() => handleQuickSelect(user.name)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                currentUsername.toLowerCase() === user.name.toLowerCase()
-                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700'
-                  : 'bg-neutral-800/80 hover:bg-neutral-800 text-neutral-300 hover:text-neutral-100 border border-neutral-700/60'
-              }`}
-            >
-              @{user.label}
-            </button>
-          ))}
+      {/* Center Section: Search User Input with History dropdown */}
+      <div ref={searchBoxRef} className="relative flex-1 max-w-xs sm:max-w-sm md:max-w-md mx-2">
+        <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500" />
+          <input
+            id="global-user-search-input"
+            type="text"
+            value={searchInput}
+            onFocus={() => setShowSearchHistory(true)}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search GitHub user (e.g. torvalds)..."
+            className="w-full pl-8 pr-16 py-1.5 rounded-lg bg-neutral-950 border border-neutral-750 text-xs text-neutral-100 placeholder:text-neutral-500 focus:outline-hidden focus:border-emerald-500 transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={isLoading || !searchInput.trim()}
+            className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-medium transition-colors flex items-center gap-1 disabled:opacity-40"
+          >
+            {isLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <span>Go</span>}
+          </button>
+        </form>
+
+        {/* Recent Searches Dropdown */}
+        {showSearchHistory && recentSearches.length > 0 && (
+          <div
+            id="recent-searches-dropdown"
+            className="absolute left-0 right-0 top-full mt-1.5 bg-neutral-900 border border-neutral-750 rounded-xl shadow-2xl p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-100"
+          >
+            <div className="flex items-center justify-between px-2 py-1 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
+              <span className="flex items-center gap-1">
+                <History className="w-3 h-3 text-emerald-400" />
+                Recent Profiles
+              </span>
+              <button
+                onClick={clearRecentSearches}
+                className="text-neutral-500 hover:text-neutral-300 text-[10px] normal-case"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="py-1 max-h-48 overflow-y-auto">
+              {recentSearches.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => handleSelectRecent(name)}
+                  className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-neutral-800 text-neutral-300 hover:text-neutral-100 flex items-center justify-between group transition-colors"
+                >
+                  <span className="font-mono text-xs">@{name}</span>
+                  <span className="text-[10px] text-neutral-500 group-hover:text-emerald-400">
+                    Switch
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Right Section: Quick File Finder, View Modes, Export & Rate Limit */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        {/* Quick File Search Modal Trigger (Ctrl+P) */}
+        <button
+          id="trigger-quick-file-search-btn"
+          onClick={onOpenQuickFileSearch}
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-750 hover:border-neutral-600 text-xs text-neutral-300 hover:text-neutral-100 transition-colors shadow-xs"
+          title="Jump to any file (Ctrl + P)"
+        >
+          <Search className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="font-mono text-[11px]">Jump to File</span>
+          <kbd className="px-1.5 py-0.5 rounded bg-neutral-800 text-[10px] font-mono text-neutral-400 border border-neutral-700">
+            Ctrl+P
+          </kbd>
+        </button>
+
+        {/* Live Site Shortcut Pill (if available) */}
+        {prodUrl && (
+          <button
+            id="top-nav-live-site-btn"
+            onClick={onOpenLivePreview}
+            className="hidden lg:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/50 text-emerald-300 text-xs font-mono transition-colors shadow-xs"
+            title={`Preview live production deployment: ${prodUrl}`}
+          >
+            <Globe className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            <span>Live Site</span>
+          </button>
+        )}
+
+        {/* Split Code + Live View Toggle */}
+        <button
+          id="toggle-split-code-live-btn"
+          onClick={() => setIsSplitCodeLive((prev) => !prev)}
+          className={`p-1.5 rounded-lg border text-xs transition-colors hidden sm:flex items-center gap-1 ${
+            isSplitCodeLive
+              ? 'bg-emerald-950 text-emerald-300 border-emerald-600/60 shadow-xs'
+              : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border-neutral-800'
+          }`}
+          title={isSplitCodeLive ? 'Disable Split Screen' : 'Side-by-Side Split View (Code + Live)'}
+        >
+          <Columns className="w-3.5 h-3.5" />
+          <span className="hidden xl:inline text-[11px]">Split View</span>
+        </button>
+
+        {/* Sidebar Visibility Toggles (To expand Code & Live View width) */}
+        <div className="hidden lg:flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800">
+          <button
+            id="toggle-repo-sidebar-btn"
+            onClick={() => setShowRepoSidebar((prev) => !prev)}
+            className={`p-1 rounded transition-colors ${
+              showRepoSidebar
+                ? 'text-neutral-200 bg-neutral-800'
+                : 'text-neutral-500 hover:text-neutral-300'
+            }`}
+            title={showRepoSidebar ? 'Hide Repositories sidebar (give more space to code)' : 'Show Repositories sidebar'}
+          >
+            {showRepoSidebar ? (
+              <PanelLeftClose className="w-3.5 h-3.5" />
+            ) : (
+              <PanelLeftOpen className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          <button
+            id="toggle-activity-sidebar-btn"
+            onClick={() => setShowActivitySidebar((prev) => !prev)}
+            className={`p-1 rounded transition-colors ${
+              showActivitySidebar
+                ? 'text-neutral-200 bg-neutral-800'
+                : 'text-neutral-500 hover:text-neutral-300'
+            }`}
+            title={showActivitySidebar ? 'Hide Activity sidebar (give more space to code)' : 'Show Activity sidebar'}
+          >
+            {showActivitySidebar ? (
+              <PanelRightClose className="w-3.5 h-3.5" />
+            ) : (
+              <PanelRightOpen className="w-3.5 h-3.5" />
+            )}
+          </button>
         </div>
+
+        {/* External Web Editor / Download ZIP */}
+        {selectedRepo && (
+          <div className="hidden xl:flex items-center gap-1">
+            {githubDevUrl && (
+              <a
+                id="top-nav-github-dev-link"
+                href={githubDevUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-300 hover:text-neutral-100 transition-colors"
+                title="Open in VS Code for Web (github.dev)"
+              >
+                <FileCode2 className="w-3.5 h-3.5 text-sky-400" />
+              </a>
+            )}
+
+            {downloadZipUrl && (
+              <a
+                id="top-nav-download-zip-link"
+                href={downloadZipUrl}
+                download
+                className="p-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-300 hover:text-neutral-100 transition-colors"
+                title="Download full repository as ZIP"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Rate Limit & Token Pill */}
+        <button
+          id="top-nav-token-btn"
+          onClick={onOpenTokenModal}
+          className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-xs font-mono text-neutral-300 hover:text-neutral-100 transition-colors shadow-xs"
+          title="GitHub Personal Access Token & API Rate Limit status"
+        >
+          <Key className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="hidden sm:inline">
+            <strong className={rateLimit && rateLimit.remaining < 10 ? 'text-rose-400' : 'text-emerald-400'}>
+              {rateLimit ? `${rateLimit.remaining}/${rateLimit.limit}` : '60/60'}
+            </strong>
+          </span>
+        </button>
       </div>
     </header>
   );
