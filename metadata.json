@@ -1,0 +1,6 @@
+{
+  "name": "GitHub Repo Explorer",
+  "description": "Search any public GitHub user, explore repositories, browse files and code, and view repository commits, PRs, and comments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
