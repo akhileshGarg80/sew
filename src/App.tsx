@@ -35,6 +35,8 @@ import { TokenModal } from './components/TokenModal';
 import { QuickFileSearchModal } from './components/QuickFileSearchModal';
 import { RightLinksRail } from './components/RightLinksRail';
 import { LiveSiteOverlayBox } from './components/LiveSiteOverlayBox';
+import { CleanInitialState } from './components/CleanInitialState';
+import { saveRecentUser } from './utils/recentUsers';
 import {
   AlertTriangle,
   FolderTree,
@@ -44,10 +46,11 @@ import {
   Key,
   XCircle,
   Globe,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function App() {
-  const [currentUsername, setCurrentUsername] = useState<string>('shadcn');
+  const [currentUsername, setCurrentUsername] = useState<string>('');
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
@@ -129,6 +132,8 @@ export default function App() {
 
   // Fetch user data & repositories
   const loadUserData = useCallback(async (username: string) => {
+    const trimmed = username.trim();
+    if (!trimmed) return;
     setIsLoadingUser(true);
     setErrorMessage(null);
     setSelectedRepo(null);
@@ -141,13 +146,14 @@ export default function App() {
     setLanguages(null);
     setContributors([]);
     setReleases([]);
+    saveRecentUser(trimmed);
 
     try {
-      const userData = await fetchGitHubUser(username);
+      const userData = await fetchGitHubUser(trimmed);
       setUser(userData);
       setCurrentUsername(userData.login);
 
-      const userRepos = await fetchUserRepos(username);
+      const userRepos = await fetchUserRepos(trimmed);
       setRepos(userRepos);
 
       // Automatically select the first repository
@@ -228,10 +234,24 @@ export default function App() {
     });
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    loadUserData('shadcn');
-  }, [loadUserData]);
+  // Reset back to clean initial state (no user loaded)
+  const handleReset = useCallback(() => {
+    setUser(null);
+    setSelectedRepo(null);
+    setCurrentUsername('');
+    setRepos([]);
+    setTreeItems([]);
+    setSelectedFilePath(null);
+    setFileData(null);
+    setCommits([]);
+    setPullRequests([]);
+    setComments([]);
+    setLanguages(null);
+    setContributors([]);
+    setReleases([]);
+    setErrorMessage(null);
+    setIsOverlayBoxOpen(false);
+  }, []);
 
   // When selectedRepo changes, trigger loadRepoData
   useEffect(() => {
@@ -313,6 +333,7 @@ export default function App() {
           isSplitCodeLive={isSplitCodeLive}
           setIsSplitCodeLive={setIsSplitCodeLive}
           onOpenLivePreview={() => handleOpenLivePreview(selectedRepo || undefined)}
+          onReset={handleReset}
         />
 
         {/* Error / Rate Limit Alert Banner */}
@@ -346,192 +367,220 @@ export default function App() {
           </div>
         )}
 
-        {/* Mobile Tab Bar Switcher (< lg screens) */}
-        <div className="lg:hidden flex items-center border-t border-neutral-800 bg-neutral-900 text-xs font-medium">
-          <button
-            id="mobile-tab-repos"
-            onClick={() => setMobileView('repos')}
-            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-              mobileView === 'repos'
-                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <BookMarked className="w-3.5 h-3.5" />
-            <span>Repos ({repos.length})</span>
-          </button>
+        {/* Mobile Tab Bar Switcher (< lg screens, only when user loaded) */}
+        {user && (
+          <div className="lg:hidden flex items-center border-t border-neutral-800 bg-neutral-900 text-xs font-medium">
+            <button
+              id="mobile-tab-repos"
+              onClick={() => setMobileView('repos')}
+              className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+                mobileView === 'repos'
+                  ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <BookMarked className="w-3.5 h-3.5" />
+              <span>Repos ({repos.length})</span>
+            </button>
 
-          <button
-            id="mobile-tab-tree"
-            onClick={() => setMobileView('tree')}
-            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-              mobileView === 'tree'
-                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <FolderTree className="w-3.5 h-3.5" />
-            <span>Files</span>
-          </button>
+            <button
+              id="mobile-tab-tree"
+              onClick={() => setMobileView('tree')}
+              className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+                mobileView === 'tree'
+                  ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <FolderTree className="w-3.5 h-3.5" />
+              <span>Files</span>
+            </button>
 
-          <button
-            id="mobile-tab-code"
-            onClick={() => setMobileView('code')}
-            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-              mobileView === 'code'
-                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span>Code & Live</span>
-          </button>
+            <button
+              id="mobile-tab-code"
+              onClick={() => setMobileView('code')}
+              className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+                mobileView === 'code'
+                  ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>Code & Live</span>
+            </button>
 
-          <button
-            id="mobile-tab-activity"
-            onClick={() => setMobileView('activity')}
-            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-              mobileView === 'activity'
-                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <GitPullRequest className="w-3.5 h-3.5" />
-            <span>Activity</span>
-          </button>
+            <button
+              id="mobile-tab-activity"
+              onClick={() => setMobileView('activity')}
+              className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+                mobileView === 'activity'
+                  ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <GitPullRequest className="w-3.5 h-3.5" />
+              <span>Activity</span>
+            </button>
 
-          <button
-            id="mobile-tab-links"
-            onClick={() => setMobileView('links')}
-            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-              mobileView === 'links'
-                ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Links</span>
-          </button>
-        </div>
+            <button
+              id="mobile-tab-links"
+              onClick={() => setMobileView('links')}
+              className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+                mobileView === 'links'
+                  ? 'border-emerald-400 text-emerald-300 bg-neutral-800/60'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>Links</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Main Responsive Layout with 5 Side-by-Side Columns */}
-      <main id="main-content-area" className="flex-1 min-h-0 flex overflow-hidden relative">
-        {/* Column 1: Public Repositories (Vertical list) */}
-        {showRepoSidebar && (
+      {/* Main Content Area: Clean initial state OR Loading Canvas OR 5-Column Dashboard */}
+      {!user && !isLoadingUser ? (
+        <CleanInitialState
+          onSearch={loadUserData}
+          isLoading={isLoadingUser}
+          onOpenTokenModal={() => setIsTokenModalOpen(true)}
+        />
+      ) : isLoadingUser && !user ? (
+        <div
+          id="loading-user-initial-canvas"
+          className="flex-1 w-full h-full flex flex-col items-center justify-center space-y-4 p-8 bg-neutral-950 text-center select-none"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-neutral-900 border border-neutral-750 flex items-center justify-center shadow-2xl">
+            <RefreshCw className="w-7 h-7 text-emerald-400 animate-spin" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold text-neutral-200">
+              Loading GitHub User Data...
+            </h2>
+            <p className="text-xs text-neutral-500 font-mono">
+              {currentUsername ? `@${currentUsername}` : 'Fetching repositories and profile'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        /* Main Responsive Layout with 5 Side-by-Side Columns */
+        <main id="main-content-area" className="flex-1 min-h-0 flex overflow-hidden relative">
+          {/* Column 1: Public Repositories (Vertical list) */}
+          {showRepoSidebar && (
+            <section
+              aria-label="Repositories"
+              className={`w-full lg:w-56 xl:w-64 shrink-0 h-full overflow-hidden flex flex-col border-r border-neutral-850 ${
+                mobileView === 'repos' ? 'flex' : 'hidden lg:flex'
+              }`}
+            >
+              <RepoList
+                repos={repos}
+                selectedRepo={selectedRepo}
+                onSelectRepo={handleSelectRepo}
+                isLoading={isLoadingUser}
+                onOpenLivePreview={handleOpenLivePreview}
+              />
+            </section>
+          )}
+
+          {/* Column 2: File & Folder Structure Explorer */}
           <section
-            aria-label="Repositories"
-            className={`w-full lg:w-56 xl:w-64 shrink-0 h-full overflow-hidden flex flex-col border-r border-neutral-850 ${
-              mobileView === 'repos' ? 'flex' : 'hidden lg:flex'
+            aria-label="File Tree"
+            className={`w-full lg:w-52 xl:w-60 shrink-0 h-full overflow-hidden flex flex-col border-r border-neutral-850 ${
+              mobileView === 'tree' ? 'flex' : 'hidden lg:flex'
             }`}
           >
-            <RepoList
+            <FileTree
+              repo={selectedRepo}
+              treeItems={treeItems}
+              selectedFilePath={selectedFilePath}
+              onSelectFile={handleSelectFile}
+              isLoading={isLoadingTree}
+              onRefresh={() => selectedRepo && loadRepoData(selectedRepo)}
+            />
+          </section>
+
+          {/* Column 3: File Code Viewer & Live Preview (Center View - Highest Flexibility) */}
+          <section
+            aria-label="Code Viewer"
+            className={`w-full lg:flex-1 h-full min-w-0 overflow-hidden flex flex-col ${
+              mobileView === 'code' ? 'flex' : 'hidden lg:flex'
+            }`}
+          >
+            <CodeViewer
+              repo={selectedRepo}
+              fileData={fileData}
+              isLoading={isLoadingFile}
+              initialMode={codeViewerMode}
+              isSplitCodeLive={isSplitCodeLive}
+              onToggleSplitMode={() => setIsSplitCodeLive((prev) => !prev)}
+              onOpenLiveSiteOverlay={(url, title) => {
+                setOverlayUrl(url);
+                setOverlayTitle(title);
+                setOverlayRepo(selectedRepo);
+                setIsOverlayBoxOpen(true);
+              }}
+            />
+          </section>
+
+          {/* Column 4: Commits, PRs, Comments & Overview (Right-side column) */}
+          {showActivitySidebar && (
+            <section
+              aria-label="Activity Feed"
+              className={`w-full lg:w-64 xl:w-72 shrink-0 h-full overflow-hidden flex flex-col border-l border-neutral-850 ${
+                mobileView === 'activity' ? 'flex' : 'hidden lg:flex'
+              }`}
+            >
+              <ActivityPanel
+                repo={selectedRepo}
+                commits={commits}
+                pullRequests={pullRequests}
+                comments={comments}
+                languages={languages}
+                contributors={contributors}
+                releases={releases}
+                isLoading={isLoadingActivity}
+                onRefresh={() => selectedRepo && loadRepoData(selectedRepo)}
+                onOpenLivePreview={() => handleOpenLivePreview(selectedRepo || undefined)}
+              />
+            </section>
+          )}
+
+          {/* Column 5: Right Links Rail (Far-right quick links & live demos) */}
+          <section
+            aria-label="Quick Links & Demos"
+            className={`h-full overflow-hidden flex flex-col ${
+              mobileView === 'links' ? 'flex w-full' : 'hidden lg:flex shrink-0'
+            }`}
+          >
+            <RightLinksRail
               repos={repos}
               selectedRepo={selectedRepo}
-              onSelectRepo={handleSelectRepo}
-              isLoading={isLoadingUser}
-              onOpenLivePreview={handleOpenLivePreview}
+              user={user}
+              activeOverlayUrl={overlayUrl}
+              isOverlayOpen={isOverlayBoxOpen}
+              onSelectLink={(url, title, repo) => {
+                setOverlayUrl(url);
+                setOverlayTitle(title);
+                setOverlayRepo(repo);
+                setIsOverlayBoxOpen(true);
+              }}
+              railMode={railMode}
+              setRailMode={setRailMode}
             />
           </section>
-        )}
 
-        {/* Column 2: File & Folder Structure Explorer */}
-        <section
-          aria-label="File Tree"
-          className={`w-full lg:w-52 xl:w-60 shrink-0 h-full overflow-hidden flex flex-col border-r border-neutral-850 ${
-            mobileView === 'tree' ? 'flex' : 'hidden lg:flex'
-          }`}
-        >
-          <FileTree
-            repo={selectedRepo}
-            treeItems={treeItems}
-            selectedFilePath={selectedFilePath}
-            onSelectFile={handleSelectFile}
-            isLoading={isLoadingTree}
-            onRefresh={() => selectedRepo && loadRepoData(selectedRepo)}
+          {/* Full-Page Live Site Box (covers left & center columns, leaving right links rail accessible) */}
+          <LiveSiteOverlayBox
+            isOpen={isOverlayBoxOpen}
+            url={overlayUrl}
+            title={overlayTitle}
+            repo={overlayRepo}
+            onClose={() => setIsOverlayBoxOpen(false)}
+            railWidth={railWidthPx}
           />
-        </section>
-
-        {/* Column 3: File Code Viewer & Live Preview (Center View - Highest Flexibility) */}
-        <section
-          aria-label="Code Viewer"
-          className={`w-full lg:flex-1 h-full min-w-0 overflow-hidden flex flex-col ${
-            mobileView === 'code' ? 'flex' : 'hidden lg:flex'
-          }`}
-        >
-          <CodeViewer
-            repo={selectedRepo}
-            fileData={fileData}
-            isLoading={isLoadingFile}
-            initialMode={codeViewerMode}
-            isSplitCodeLive={isSplitCodeLive}
-            onToggleSplitMode={() => setIsSplitCodeLive((prev) => !prev)}
-            onOpenLiveSiteOverlay={(url, title) => {
-              setOverlayUrl(url);
-              setOverlayTitle(title);
-              setOverlayRepo(selectedRepo);
-              setIsOverlayBoxOpen(true);
-            }}
-          />
-        </section>
-
-        {/* Column 4: Commits, PRs, Comments & Overview (Right-side column) */}
-        {showActivitySidebar && (
-          <section
-            aria-label="Activity Feed"
-            className={`w-full lg:w-64 xl:w-72 shrink-0 h-full overflow-hidden flex flex-col border-l border-neutral-850 ${
-              mobileView === 'activity' ? 'flex' : 'hidden lg:flex'
-            }`}
-          >
-            <ActivityPanel
-              repo={selectedRepo}
-              commits={commits}
-              pullRequests={pullRequests}
-              comments={comments}
-              languages={languages}
-              contributors={contributors}
-              releases={releases}
-              isLoading={isLoadingActivity}
-              onRefresh={() => selectedRepo && loadRepoData(selectedRepo)}
-              onOpenLivePreview={() => handleOpenLivePreview(selectedRepo || undefined)}
-            />
-          </section>
-        )}
-
-        {/* Column 5: Right Links Rail (Far-right quick links & live demos) */}
-        <section
-          aria-label="Quick Links & Demos"
-          className={`h-full overflow-hidden flex flex-col ${
-            mobileView === 'links' ? 'flex w-full' : 'hidden lg:flex shrink-0'
-          }`}
-        >
-          <RightLinksRail
-            repos={repos}
-            selectedRepo={selectedRepo}
-            user={user}
-            activeOverlayUrl={overlayUrl}
-            isOverlayOpen={isOverlayBoxOpen}
-            onSelectLink={(url, title, repo) => {
-              setOverlayUrl(url);
-              setOverlayTitle(title);
-              setOverlayRepo(repo);
-              setIsOverlayBoxOpen(true);
-            }}
-            railMode={railMode}
-            setRailMode={setRailMode}
-          />
-        </section>
-
-        {/* Full-Page Live Site Box (covers left & center columns, leaving right links rail accessible) */}
-        <LiveSiteOverlayBox
-          isOpen={isOverlayBoxOpen}
-          url={overlayUrl}
-          title={overlayTitle}
-          repo={overlayRepo}
-          onClose={() => setIsOverlayBoxOpen(false)}
-          railWidth={railWidthPx}
-        />
-      </main>
+        </main>
+      )}
 
       {/* Quick File Search Modal (Cmd/Ctrl+P) */}
       <QuickFileSearchModal
